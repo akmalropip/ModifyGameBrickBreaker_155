@@ -95,3 +95,52 @@ class CarPaddle:
 
     def logical_bbox(self):
         return (self.x - 52, self.y - 25, self.x + 53, self.y + 27)
+
+
+class LavaBrick:
+    COLORS = {
+        1: ("#a93613", "#ff7a18", "#ffc247"),
+        2: ("#702316", "#d94b16", "#ff9b22"),
+        3: ("#4c1c19", "#a93613", "#f06a18"),
+    }
+
+    def __init__(self, canvas, x, y, hits, tag):
+        self.canvas = canvas
+        self.x, self.y = x, y
+        self.width, self.height = 66, 24
+        self.hits = hits
+        self.tag = tag
+        self.draw()
+
+    def draw(self):
+        c = self.canvas
+        x1, y1 = self.x-self.width/2, self.y-self.height/2
+        x2, y2 = self.x+self.width/2, self.y+self.height/2
+        dark, mid, hot = self.COLORS[self.hits]
+        
+        # Mendaftarkan tags "brick" agar bisa dizoom secara massal bersamaan
+        c.create_rectangle(x1, y1, x2, y2, fill=dark, outline="#ff9a32", width=2, tags=(self.tag, self.tag+"_bg", "brick"))
+        blocks = [
+            (x1+4, y1+4, x1+17, y1+10, mid, "_m1"), (x1+21, y1+3, x1+34, y1+9, hot, "_h1"),
+            (x1+42, y1+4, x1+59, y1+10, mid, "_m2"), (x1+10, y1+13, x1+24, y1+20, hot, "_h2"),
+            (x1+30, y1+13, x1+43, y1+20, mid, "_m3"), (x1+49, y1+13, x1+62, y1+20, hot, "_h3"),
+        ]
+        for a, b, d, e, color, subtag in blocks:
+            c.create_rectangle(a, b, d, e, fill=color, outline=dark, width=1, tags=(self.tag, self.tag+subtag, "brick"))
+
+    def update_colors(self):
+        dark, mid, hot = self.COLORS[self.hits]
+        self.canvas.itemconfig(self.tag+"_bg", fill=dark, outline="#ff9a32")
+        for subtag in ["_m1", "_m2", "_m3"]: self.canvas.itemconfig(self.tag+subtag, fill=mid, outline=dark)
+        for subtag in ["_h1", "_h2", "_h3"]: self.canvas.itemconfig(self.tag+subtag, fill=hot, outline=dark)
+
+    def hit(self):
+        self.hits -= 1
+        if self.hits <= 0:
+            self.canvas.delete(self.tag)
+            return True
+        self.update_colors()
+        return False
+
+    def logical_bbox(self):
+        return (self.x - self.width/2, self.y - self.height/2, self.x + self.width/2, self.y + self.height/2)
