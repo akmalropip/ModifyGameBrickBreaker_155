@@ -49,3 +49,49 @@ class Ball:
 
     def delete(self):
         self.canvas.delete("ball")
+
+
+class CarPaddle:
+    WIDTH = 104
+    HEIGHT = 42
+
+    def __init__(self, canvas, x, y):
+        self.canvas = canvas
+        self.x = x
+        self.y = y
+        self.ball = None
+        self.draw()
+
+    def draw(self):
+        c, x, y = self.canvas, self.x, self.y
+        c.create_oval(x-43, y+8, x-22, y+27, fill="#101820", outline="#aab7c5", width=2, tags="car")
+        c.create_oval(x+22, y+8, x+43, y+27, fill="#101820", outline="#aab7c5", width=2, tags="car")
+        c.create_polygon(x-52, y+7, x-39, y-8, x-22, y-18, x+25, y-18, x+43, y-7, x+53, y+8,
+                         x+43, y+17, x-43, y+17, fill="#1269d3", outline="#dff8ff", width=2, tags="car")
+        c.create_polygon(x-25, y-15, x-12, y-25, x+17, y-25, x+31, y-13, x+22, y-5, x-20, y-5,
+                         fill="#f4fbff", outline="#9bdcff", width=2, tags="car")
+        c.create_polygon(x-8, y-23, x+7, y-23, x+18, y-8, x-18, y-8, fill="#0b4da4",
+                         outline="#dff8ff", width=1, tags="car")
+        c.create_line(x-43, y+4, x+43, y+4, fill="#ffffff", width=3, tags="car")
+        c.create_line(x-8, y-17, x+8, y-17, fill="#ffffff", width=2, tags="car")
+        c.create_oval(x-48, y+1, x-39, y+8, fill="#eaffff", outline="#ffffff", tags="car")
+        c.create_oval(x+39, y+1, x+48, y+8, fill="#eaffff", outline="#ffffff", tags="car")
+        c.create_line(x-48, y+16, x+48, y+16, fill="#d9e8f5", width=4, tags="car")
+
+    def move(self, dx, scale_x, scale_y):
+        min_x = 5 + 52
+        max_x = LOGICAL_WIDTH - 5 - 53
+
+        new_x = self.x + dx
+        if new_x < min_x: new_x = min_x
+        if new_x > max_x: new_x = max_x
+
+        actual_dx = new_x - self.x
+        if actual_dx != 0:
+            self.canvas.move("car", actual_dx * scale_x, 0)
+            self.x = new_x
+            if self.ball and getattr(self.ball, 'is_held', False):
+                self.ball.move_to(self.x, self.ball.y, scale_x, scale_y)
+
+    def logical_bbox(self):
+        return (self.x - 52, self.y - 25, self.x + 53, self.y + 27)
