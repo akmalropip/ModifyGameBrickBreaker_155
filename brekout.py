@@ -144,3 +144,288 @@ class LavaBrick:
 
     def logical_bbox(self):
         return (self.x - self.width/2, self.y - self.height/2, self.x + self.width/2, self.y + self.height/2)
+
+
+class BrickBreaker(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master, bg=BG)
+        self.master = master
+        self.master.configure(bg=BG)
+        self.pack(fill=tk.BOTH, expand=True)
+
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+
+        self.canvas = tk.Canvas(self, width=LOGICAL_WIDTH, height=LOGICAL_HEIGHT, bg=BG, highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.bind("<Configure>", self.on_resize)
+        
+        self.running = False
+        self.finished = False
+        self.lives = 3
+        self.score = 0
+        self.speed_level = 1
+        self.bricks = []
+        
+        self.keys = set()
+        self.master.bind("<KeyPress>", self.key_press)
+        self.master.bind("<KeyRelease>", self.key_release)
+        self.canvas.bind("<Motion>", self.mouse_move)
+        self.master.bind("<space>", self.start)
+        self.master.bind("<r>", self.restart)
+        self.master.bind("<R>", self.restart)
+        
+        self.is_fullscreen = False
+        self.master.bind("<f>", self.toggle_fullscreen)
+        self.master.bind("<F>", self.toggle_fullscreen)
+        self.master.bind("<F11>", self.toggle_fullscreen)
+        self.master.bind("<Escape>", self.exit_fullscreen)
+        self.master.bind("<m>", self.minimize_window)
+        self.master.bind("<M>", self.minimize_window)
+
+        self.new_game()
+        self.check_inputs()
+        self.master.focus_force()
+
+    def on_resize(self, event):
+        # Trigger zoom jika ukuran jendela membesar (Fullscreen) atau mengecil
+        if event.widget == self.canvas:
+            if event.width <= 1 or event.height <= 1: return
+            
+            new_scale_x = event.width / LOGICAL_WIDTH
+            new_scale_y = event.height / LOGICAL_HEIGHT
+            
+            if new_scale_x == self.scale_x and new_scale_y == self.scale_y: return
+            
+            ratio_x = new_scale_x / self.scale_x
+            ratio_y = new_scale_y / self.scale_y
+            
+            self.canvas.scale("all", 0, 0, ratio_x, ratio_y)
+            self.scale_fonts(new_scale_x, new_scale_y)
+            
+            self.scale_x, self.scale_y = new_scale_x, new_scale_y
+
+    def scale_fonts(self, sx, sy):
+        # Font ikut menyesuaikan skala agar tidak kekecilan
+        avg = (sx + sy) / 2
+        self.canvas.itemconfig("title_text", font=("Arial", max(8, int(15 * avg)), "bold"))
+        self.canvas.itemconfig("hud_text", font=("Arial", max(8, int(12 * avg)), "bold"))
+        self.canvas.itemconfig("msg_title", font=("Arial", max(12, int(25 * avg)), "bold"))
+        self.canvas.itemconfig("msg_sub", font=("Arial", max(8, int(10 * avg))))
+        self.canvas.itemconfig("msg_end1", font=("Arial", max(20, int(48 * avg)), "bold"))
+        self.canvas.itemconfig("msg_end2", font=("Arial", max(8, int(13 * avg)), "bold"))
+        self.canvas.itemconfig("msg_end3", font=("Arial", max(8, int(12 * avg)), "bold"))
+
+    def toggle_fullscreen(self, event=None):
+        self.is_fullscreen = not self.is_fullscreen
+        self.master.attributes("-fullscreen", self.is_fullscreen)
+
+    def exit_fullscreen(self, event=None):
+        self.is_fullscreen = False
+        self.master.attributes("-fullscreen", False)
+        
+    def minimize_window(self, event=None):
+        self.master.iconify()
+
+    def check_inputs(self):
+        if hasattr(self, 'car') and self.car:
+            if "Left" in self.keys or "a" in self.keys or "A" in self.keys:
+                self.car.move(-16, self.scale_x, self.scale_y)
+            if "Right" in self.keys or "d" in self.keys or "D" in self.keys:
+                self.car.move(16, self.scale_x, self.scale_y)
+        self.master.after(16, self.check_inputs)
+
+    def key_press(self, event):
+        if hasattr(event, 'keysym'): self.keys.add(event.keysym)
+
+    def key_release(self, event):
+        if hasattr(event, 'keysym'): self.keys.discard(event.keysym)
+
+    def mouse_move(self, event):
+        if not self.finished and hasattr(self, 'car') and self.car:
+            # Memperhitungkan efek zoom pada pelacakan mouse
+            logical_x = event.x / self.scale_x
+            dx = logical_x - self.car.x
+            self.car.move(dx, self.scale_x, self.scale_y)
+
+    def draw_background(self):
+        c = self.canvas
+        c.create_rectangle(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT, fill=BG, outline="", tags="background")
+        for x in range(35, LOGICAL_WIDTH, 90):
+            c.create_line(x, 0, x-35, LOGICAL_HEIGHT, fill="#102b48", width=1, tags="background")
+        c.create_line(0, 116, LOGICAL_WIDTH, 116, fill="#16476b", width=1, tags="background")
+        c.create_text(LOGICAL_WIDTH/2, 18, text="ELECTRIC MINI 4WD  •  BRICK BREAKER", fill="#8cefff", font=("Arial", 15, "bold"), tags=("background", "title_text"))
+
+    def new_game(self):
+        self.canvas.delete("all")
+        self.draw_background()
+        self.lives = 3
+        self.score = 0
+        self.speed_level = 1
+        self.bricks = []
+        self.car = CarPaddle(self.canvas, LOGICAL_WIDTH/2, LOGICAL_HEIGHT-54)
+        
+        start_x = 55
+        for row in range(4):
+            for col in range(10):
+                hits = 1 if row in (0, 1) else 2
+                brick = LavaBrick(self.canvas, start_x + col * 72, 155 + row * 31, hits, "brick_%d_%d" % (row, col))
+                self.bricks.append(brick)
+                
+        self.ball = Ball(self.canvas, LOGICAL_WIDTH/2, LOGICAL_HEIGHT-95)
+        self.car.ball = self.ball
+        self.running = False
+        self.finished = False
+
+        # Aplikasikan skala zoom jika saat game dibuat ulang layar sudah berukuran penuh
+        if self.scale_x != 1.0 or self.scale_y != 1.0:
+            self.canvas.scale("background", 0, 0, self.scale_x, self.scale_y)
+            self.canvas.scale("brick", 0, 0, self.scale_x, self.scale_y)
+            self.canvas.scale("car", 0, 0, self.scale_x, self.scale_y)
+            self.canvas.scale("ball", 0, 0, self.scale_x, self.scale_y)
+            self.scale_fonts(self.scale_x, self.scale_y)
+
+        self.update_hud()
+        self.show_message("PRESS SPACE TO START", "#a8f6ff", "Kendali: Mouse / Trackpad / ← → / A D")
+
+    def update_hud(self):
+        self.canvas.delete("hud")
+        avg = (self.scale_x + self.scale_y) / 2
+        fnt = ("Arial", max(8, int(12 * avg)), "bold")
+        
+        self.canvas.create_text(75, 53, text="NYAWA: %d" % self.lives, fill="#ffffff", font=fnt, tags=("hud", "hud_text"))
+        self.canvas.create_text(LOGICAL_WIDTH/2, 53, text="SKOR: %d" % self.score, fill="#ffffff", font=fnt, tags=("hud", "hud_text"))
+        self.canvas.create_text(LOGICAL_WIDTH-100, 53, text="KECEPATAN: %.1fx" % self.speed_level, fill="#7df7ff", font=fnt, tags=("hud", "hud_text"))
+        
+        if self.scale_x != 1.0 or self.scale_y != 1.0:
+            self.canvas.scale("hud", 0, 0, self.scale_x, self.scale_y)
+
+    def show_message(self, title, color, subtitle):
+        self.canvas.delete("message")
+        self.canvas.create_rectangle(105, 220, LOGICAL_WIDTH-105, 310, fill="#081a2b", outline=color, width=3, tags="message")
+        
+        avg = (self.scale_x + self.scale_y) / 2
+        self.canvas.create_text(LOGICAL_WIDTH/2, 253, text=title, fill=color, font=("Arial", max(12, int(25 * avg)), "bold"), tags=("message", "msg_title"))
+        self.canvas.create_text(LOGICAL_WIDTH/2, 286, text=subtitle, fill="#e4faff", font=("Arial", max(8, int(10 * avg))), tags=("message", "msg_sub"))
+        
+        if self.scale_x != 1.0 or self.scale_y != 1.0:
+            self.canvas.scale("message", 0, 0, self.scale_x, self.scale_y)
+
+    def start(self, event=None):
+        if self.finished or self.running: return
+        self.canvas.delete("message")
+        self.ball.is_held = False 
+        self.running = True
+        self.loop()
+
+    def restart(self, event=None):
+        self.new_game()
+
+    def increase_speed(self):
+        current = math.hypot(self.ball.vx, self.ball.vy)
+        new_speed = min(current + 0.22, 11.5)
+        factor = new_speed / current if current else 1
+        self.ball.vx *= factor
+        self.ball.vy *= factor
+        self.speed_level = new_speed / 5.66
+        self.update_hud()
+
+    @staticmethod
+    def overlaps(a, b):
+        return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+    def loop(self):
+        if not self.running: return
+
+        b = self.ball
+        next_x = b.x + b.vx
+        next_y = b.y + b.vy
+        r = b.radius
+
+        if next_x - r <= 2 or next_x + r >= LOGICAL_WIDTH - 2:
+            b.vx *= -1
+            next_x = b.x + b.vx
+        if next_y - r <= 76:
+            b.vy = abs(b.vy)
+            next_y = b.y + b.vy
+
+        b.move_to(next_x, next_y, self.scale_x, self.scale_y)
+
+        car_box = self.car.logical_bbox()
+        ball_box = b.logical_bbox()
+        if self.overlaps(ball_box, car_box) and b.vy > 0:
+            relative = (b.x - self.car.x) / (CarPaddle.WIDTH / 2)
+            b.vx = max(-7.5, min(7.5, relative * 6.5))
+            b.vy = -abs(b.vy)
+            self.increase_speed()
+
+        for brick in list(self.bricks):
+            if self.overlaps(ball_box, brick.logical_bbox()):
+                destroyed = brick.hit()
+                b.vy *= -1
+                self.score += 10
+                self.increase_speed()
+                if destroyed:
+                    self.bricks.remove(brick)
+                    self.score += 20
+                self.update_hud()
+                break
+
+        if b.y - r > LOGICAL_HEIGHT:
+            self.lives -= 1
+            self.update_hud()
+            if self.lives <= 0:
+                self.end_game(False)
+                return
+                
+            self.ball.delete()
+            self.ball = Ball(self.canvas, self.car.x, LOGICAL_HEIGHT-95)
+            # Jika dalam mode fullscreen, zoom bola yang baru dibuat
+            if self.scale_x != 1.0 or self.scale_y != 1.0:
+                self.canvas.scale("ball", 0, 0, self.scale_x, self.scale_y)
+                
+            self.car.ball = self.ball
+            self.running = False
+            self.keys.clear() 
+            self.show_message("TRY AGAIN", "#ff9a45", "Tekan SPACE untuk melanjutkan")
+            return
+
+        if not self.bricks:
+            self.end_game(True)
+            return
+
+        delay = max(12, int(34 - self.speed_level * 1.2))
+        self.master.after(delay, self.loop)
+
+    def end_game(self, won):
+        self.running = False
+        self.finished = True
+        self.canvas.delete("message")
+        
+        color = "#8ffaff" if won else "#ff7a28"
+        bg_col = "#062b43" if won else "#35140f"
+        out_col = "#38eaff" if won else "#ff6a1a"
+        
+        self.canvas.create_rectangle(65, 175, LOGICAL_WIDTH-65, 365, fill=bg_col, outline=out_col, width=5, tags="message")
+        
+        avg = (self.scale_x + self.scale_y) / 2
+        f1, f2, f3 = ("Arial", max(20, int(48 * avg)), "bold"), ("Arial", max(8, int(13 * avg)), "bold"), ("Arial", max(8, int(12 * avg)), "bold")
+        
+        self.canvas.create_text(LOGICAL_WIDTH/2, 235, text="YOU WIN!" if won else "YOU LOSE", fill="#baffff" if won else "#ff9b3d", font=f1, tags=("message", "msg_end1"))
+        self.canvas.create_text(LOGICAL_WIDTH/2, 295, text="SEMUA BALOK LAVA BERHASIL DIHANCURKAN!" if won else "BOLA LISTRIK JATUH! COBA LAGI.", fill="#54dfff" if won else "#ffd0a0", font=f2, tags=("message", "msg_end2"))
+        self.canvas.create_text(LOGICAL_WIDTH/2, 335, text="Tekan R untuk bermain lagi", fill=color, font=f3, tags=("message", "msg_end3"))
+        
+        if self.scale_x != 1.0 or self.scale_y != 1.0:
+            self.canvas.scale("message", 0, 0, self.scale_x, self.scale_y)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.title("Electric Mini 4WD - Brick Breaker (Responsive)")
+    
+    # Menetapkan ukuran bawaan sebelum dimaksimalkan
+    root.geometry(f"{LOGICAL_WIDTH}x{LOGICAL_HEIGHT}")
+    root.configure(bg=BG)
+    
+    game = BrickBreaker(root)
+    root.mainloop()
